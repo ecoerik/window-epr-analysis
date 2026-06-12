@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fenstervergleich – Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#f4f6f9;--card:#fff;--ink:#1f3864;--mut:#5b6b7d;--line:#e2e7ee;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#222;}
+  header{background:linear-gradient(135deg,#1f3864,#2e86c1);color:#fff;padding:24px 28px;}
+  header h1{margin:0 0 4px;font-size:22px;}
+  header p{margin:0;opacity:.9;font-size:13px;}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+  .card h2{margin:0 0 4px;color:var(--ink);font-size:17px;}
+  .sub{color:var(--mut);font-size:12.5px;margin:0 0 14px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;}
+  .chartbox{position:relative;height:300px;}
+  .radarbox{position:relative;height:430px;max-width:640px;margin:0 auto;}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;}
+  th,td{border:1px solid var(--line);padding:7px 9px;text-align:right;}
+  th:first-child,td:first-child{text-align:left;}
+  thead th{background:var(--ink);color:#fff;font-weight:bold;}
+  tbody tr:nth-child(even){background:#f8fafc;}
+  .legend-note{font-size:12px;color:var(--mut);margin-top:10px;line-height:1.5;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;color:#fff;margin-right:4px;}
+  .controls{margin:6px 0 14px;font-size:13px;color:var(--mut);}
+  .controls button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;margin:0 6px 6px 0;cursor:pointer;}
+  .controls button.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  footer{color:var(--mut);font-size:11.5px;text-align:center;padding:10px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Fenstervergleich – Standardfenster 1,23 × 1,48 m (1,82 m²)</h1>
+  <p>Aggregierte Auswertung über 6 Fenstertypen · Quellen: ift Muster-EPDs / ÖKOBAUDAT OBD_2024_I · Stand 12.06.2026</p>
+</header>
+<div class="wrap">
+
+  <div class="card">
+    <h2>Aggregierter Gesamtvergleich (normalisiert, Max = 100 %)</h2>
+    <p class="sub">Jede Kennzahl auf ihren Höchstwert normiert. Außen = höherer Wert. Hinweis zur Richtung:
+      bei <b>GWP, Umweltkosten, Materialaufwand (TMR)</b> ist weniger besser (innen = günstiger),
+      beim <b>Recyclable Wert</b> ist mehr besser (außen = günstiger).</p>
+    <div class="controls" id="ctrl"></div>
+    <div class="radarbox"><canvas id="radar"></canvas></div>
+    <div class="legend-note" id="rnote"></div>
+  </div>
+
+  <div class="card">
+    <h2>Einzelkennzahlen je Fenstertyp (absolut)</h2>
+    <p class="sub">Absolutwerte je Standardfenster. Balkenfarbe = Fenstertyp (durchgängig in allen Diagrammen). Diagramme über die Schalter ein-/ausblenden.</p>
+    <div class="controls" id="kpiCtrl"><span style="margin-right:8px">Diagramme:</span></div>
+    <div class="grid">
+      <div id="box_gew"><div class="chartbox"><canvas id="c_gew"></canvas></div></div>
+      <div id="box_gwp"><div class="chartbox"><canvas id="c_gwp"></canvas></div></div>
+      <div id="box_uba"><div class="chartbox"><canvas id="c_uba"></canvas></div></div>
+      <div id="box_tmr"><div class="chartbox"><canvas id="c_tmr"></canvas></div></div>
+      <div id="box_scr"><div class="chartbox"><canvas id="c_scr"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Datentabelle</h2>
+    <div style="overflow-x:auto"><table id="tbl"></table></div>
+    <div class="legend-note">Umweltkosten = GWP × UBA-Kostensatz (≈ 880 €/t CO₂e, Klimakomponente). Materialaufwand (TMR) = Materialfußabdruck (100 % Primärmaterial, Wuppertal MIT). Recyclable Wert = Bruttowert sortenrein (Altholz ausgeschlossen). Details siehe Reiter „Dokumentation“ der Excel-Datei.</div>
+  </div>
+
+  <footer>Arbeitspaket Materialfußabdruck · Standardfenster 1,23 × 1,48 m (1,82 m²)</footer>
+</div>
+
+<script>
+const types=["Holz","Holz-Aluminium","Aluminium","Stahl","Kunststoff","Kunststoff-Aluminium"];
+const colors=["#8c6d31","#b5651d","#7f8c8d","#34495e","#2e86c1","#16a085"];
+const kpis=[
+ {key:"gew",label:"Gewicht (kg)",unit:"kg",data:[84.41,83.12,65.47,70.43,69.76,76.75]},
+ {key:"gwp",label:"GWP A1-A3 (kg CO₂e)",unit:"kg CO₂e",data:[65.12,128.80,322.69,169.82,132.70,227.86]},
+ {key:"uba",label:"Umweltkosten (€)",unit:"€",data:[57.31,113.35,283.96,149.45,116.77,200.52]},
+ {key:"tmr",label:"Materialaufwand (TMR)",unit:"kg",data:[388.06,541.38,814.81,366.59,286.09,610.73]},
+ {key:"scr",label:"Recyclable Wert (€)",unit:"€",data:[4.61,10.52,24.42,10.89,23.83,31.31]},
+];
+const fmt=v=>v.toLocaleString("de-DE",{maximumFractionDigits:1});
+const maxOf=arr=>Math.max(...arr);
+
+// Radar ohne Gewicht
+const rk=kpis.filter(k=>k.key!=="gew");
+const norm=rk.map(k=>k.data.map(v=>v/maxOf(k.data)*100));
+function radarData(visible){
+  return {labels:rk.map(k=>k.label),
+    datasets:types.map((t,ti)=>({label:t,hidden:!visible[ti],
+      data:rk.map((k,ki)=>norm[ki][ti]),
+      borderColor:colors[ti],backgroundColor:colors[ti]+"22",
+      borderWidth:2,pointRadius:3,pointBackgroundColor:colors[ti]}))};
+}
+let visible=types.map((_,i)=>i<2||i===4);
+const radar=new Chart(document.getElementById("radar"),{type:"radar",
+  data:radarData(visible),
+  options:{responsive:true,maintainAspectRatio:false,
+    scales:{r:{min:0,max:100,ticks:{stepSize:25,callback:v=>v+"%"},pointLabels:{font:{size:12,weight:"bold"}}}},
+    plugins:{legend:{position:"bottom"},
+      tooltip:{callbacks:{label:c=>{const k=rk[c.dataIndex];
+        return `${c.dataset.label}: ${fmt(k.data[types.indexOf(c.dataset.label)])} ${k.unit} (${Math.round(c.parsed.r)}%)`;}}}}}});
+const ctrl=document.getElementById("ctrl");
+ctrl.innerHTML='<span style="margin-right:8px">Schnellauswahl:</span>'+
+ '<button data-m="all">Alle</button><button data-m="none">Keine</button>'+
+ '<button data-m="alu">Alu-Varianten</button>';
+ctrl.addEventListener("click",e=>{const m=e.target.getAttribute("data-m");if(!m)return;
+  if(m==="all")visible=types.map(_=>true);
+  else if(m==="none")visible=types.map(_=>false);
+  else if(m==="alu")visible=types.map((t)=>t.includes("Aluminium"));
+  radar.data=radarData(visible);radar.update();});
+document.getElementById("rnote").innerHTML=
+  types.map((t,i)=>`<span class="pill" style="background:${colors[i]}">${t}</span>`).join("");
+
+function bar(id,k){
+ new Chart(document.getElementById(id),{type:"bar",
+   data:{labels:types,datasets:[{label:k.label,data:k.data,backgroundColor:colors,borderRadius:4}]},
+   options:{responsive:true,maintainAspectRatio:false,indexAxis:"y",
+     plugins:{legend:{display:false},title:{display:true,text:k.label,font:{size:14}},
+       tooltip:{callbacks:{label:c=>fmt(c.parsed.x)+" "+k.unit}}},
+     scales:{x:{beginAtZero:true}}}});
+}
+bar("c_gew",kpis[0]);bar("c_gwp",kpis[1]);bar("c_uba",kpis[2]);bar("c_tmr",kpis[3]);bar("c_scr",kpis[4]);
+
+const kc=document.getElementById("kpiCtrl");
+kpis.forEach(k=>{const b=document.createElement("button");b.textContent=k.label;b.className="active";b.dataset.k=k.key;kc.appendChild(b);});
+kc.addEventListener("click",e=>{const key=e.target.dataset.k;if(!key)return;
+  const on=e.target.classList.toggle("active");
+  document.getElementById("box_"+key).style.display=on?"":"none";});
+
+let h="<thead><tr><th>Fenstertyp</th>"+kpis.map(k=>`<th>${k.label}</th>`).join("")+"</tr></thead><tbody>";
+types.forEach((t,ti)=>{h+=`<tr><td><span class="pill" style="background:${colors[ti]}">&nbsp;</span> ${t}</td>`+
+  kpis.map(k=>`<td>${fmt(k.data[ti])}</td>`).join("")+"</tr>";});
+h+="</tbody>";document.getElementById("tbl").innerHTML=h;
+</script>
+</body>
+</html>
