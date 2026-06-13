@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fenstervergleich – Dashboard (1 m², skalierbar)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#f4f6f9;--card:#fff;--ink:#1f3864;--mut:#5b6b7d;--line:#e2e7ee;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#222;}
+  header{background:linear-gradient(135deg,#1f3864,#2e86c1);color:#fff;padding:24px 28px;}
+  header h1{margin:0 0 4px;font-size:22px;} header p{margin:0;opacity:.9;font-size:13px;}
+  .wrap{max-width:1180px;margin:0 auto;padding:20px 16px 60px;}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:16px 0;box-shadow:0 1px 3px rgba(0,0,0,.04);}
+  .card h2{margin:0 0 4px;color:var(--ink);font-size:17px;}
+  .sub{color:var(--mut);font-size:12.5px;margin:0 0 14px;}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;}
+  .chartbox{position:relative;height:300px;}
+  .radarbox{position:relative;height:430px;max-width:640px;margin:0 auto;}
+  table{border-collapse:collapse;width:100%;font-size:12px;}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:right;}
+  th:first-child,td:first-child{text-align:left;}
+  thead th{background:var(--ink);color:#fff;font-weight:bold;}
+  tbody tr:nth-child(even){background:#f8fafc;}
+  .legend-note{font-size:12px;color:var(--mut);margin-top:10px;line-height:1.5;}
+  .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;color:#fff;margin-right:4px;}
+  .controls{margin:6px 0 12px;font-size:13px;color:var(--mut);}
+  .controls button{font:inherit;border:1px solid var(--line);background:#fff;border-radius:8px;padding:6px 12px;margin:0 6px 6px 0;cursor:pointer;}
+  .controls button.active{background:var(--ink);color:#fff;border-color:var(--ink);}
+  #areaIn{font:inherit;width:90px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;}
+  .big{font-size:15px;color:var(--ink);font-weight:bold;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Fenstervergleich – Basis 1 m², skalierbar</h1>
+  <p>Alle Kennwerte je 1 m² · skalierbar auf Fensterformate · ift Muster-EPDs / ÖKOBAUDAT OBD_2024_I · Stand 12.06.2026</p>
+</header>
+<div class="wrap">
+
+  <div class="card">
+    <h2>Bezugsfläche / Skalierung</h2>
+    <p class="sub">Basis sind 1-m²-Werte. Fläche eingeben oder Standardformat wählen – alle Diagramme und die Tabelle skalieren mit.</p>
+    <div class="controls">
+      <label>Fläche [m²]: <input id="areaIn" type="number" min="0.1" step="0.01" value="1"></label>
+      <span style="margin:0 10px">oder:</span>
+      <button data-a="1">1 m²</button>
+      <button data-a="1.8204">1,23 × 1,48 m (1,82 m²)</button>
+      <button data-a="3.2264">1,48 × 2,18 m (3,23 m²)</button>
+    </div>
+    <div class="big" id="areaLabel"></div>
+  </div>
+
+  <div class="card">
+    <h2>Aggregierter Gesamtvergleich (normalisiert, Max = 100 %)</h2>
+    <p class="sub">GWP &amp; Umweltkosten je nach <b>Systemgrenze</b>. Bei GWP/Umweltkosten/TMR ist innen besser, beim Recyclable Wert außen. (Form ist flächenunabhängig; Tooltips zeigen skalierte Werte.)</p>
+    <div class="controls" id="bound"></div>
+    <div class="controls" id="ctrl"></div>
+    <div class="radarbox"><canvas id="radar"></canvas></div>
+    <div class="legend-note" id="rnote"></div>
+  </div>
+
+  <div class="card">
+    <h2>GWP nach Systemgrenze</h2>
+    <p class="sub">Gate = A1-A3 · Grave = A1-C4 · Netto = Grave + Modul D. Modul D (Recyclingpotenzial) ist eine Gutschrift (negativ).</p>
+    <div class="grid">
+      <div><div class="chartbox"><canvas id="c_gwp"></canvas></div></div>
+      <div><div class="chartbox"><canvas id="c_d"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Umweltkosten nach Systemgrenze</h2>
+    <p class="sub">Umweltkosten = GWP × UBA-Kostensatz (≈ 880 €/t CO₂e, Klimakomponente).</p>
+    <div class="chartbox" style="height:320px"><canvas id="c_uk"></canvas></div>
+  </div>
+
+  <div class="card">
+    <h2>Weitere Einzelkennzahlen je Fenstertyp</h2>
+    <p class="sub">Inklusive GWP und Umweltkosten je Systemgrenze. Diagramme über die Schalter ein-/ausblenden.</p>
+    <div class="controls" id="kpiCtrl"><span style="margin-right:8px">Diagramme:</span></div>
+    <div class="grid" id="kpiGrid"></div>
+  </div>
+
+  <div class="card">
+    <h2>Datentabelle</h2>
+    <div style="overflow-x:auto"><table id="tbl"></table></div>
+    <div class="legend-note" id="tnote"></div>
+  </div>
+
+  <footer>Arbeitspaket Materialfußabdruck · Werte je 1 m², skalierbar</footer>
+</div>
+
+<script>
+const types=["Holz","Holz-Aluminium","Aluminium","Stahl","Kunststoff","Kunststoff-Aluminium"];
+const colors=["#8c6d31","#b5651d","#7f8c8d","#34495e","#2e86c1","#16a085"];
+const RATE=0.88;
+const base={
+ gw:[46.38,45.67,35.97,38.70,38.33,42.17],
+ tmr:[213.2,297.4,447.6,201.4,157.2,335.5],
+ scr:[2.53,5.78,13.41,5.98,13.09,17.20],
+ gwp:{gate:[35.78,70.77,177.27,93.31,72.91,125.19],
+      grave:[82.77,105.78,192.80,108.20,87.66,140.64],
+      net:[63.70,69.38,111.83,82.42,64.08,97.51],
+      d:[-19.07,-36.40,-80.97,-25.78,-23.58,-43.13]}};
+let area=1;
+const fmt=v=>v.toLocaleString("de-DE",{maximumFractionDigits:1});
+const maxOf=a=>Math.max(...a.map(Math.abs));
+const sc=a=>a.map(v=>v*area);
+const G=b=>sc(base.gwp[b]);
+const UK=b=>sc(base.gwp[b].map(v=>v*RATE));
+const blab={gate:"Gate (A1-A3)",grave:"Grave (A1-C4)",net:"Netto"};
+const CH=[];
+function redraw(){CH.forEach(o=>{o.ch.data.datasets=o.build();o.ch.update();});buildTable();
+  document.getElementById("areaLabel").textContent="Aktuelle Bezugsfläche: "+fmt(area)+" m²";}
+
+// ---------- Radar (flächenunabhängige Form) ----------
+let curB="gate";
+function radarMetrics(b){return {raw:[base.gwp[b],base.gwp[b].map(v=>v*RATE),base.tmr,base.scr],
+  labels:["GWP – "+blab[b],"Umweltkosten – "+blab[b],"Materialaufwand (TMR)","Recyclable Wert (€)"],
+  units:["kg CO₂e","€","kg","€"]};}
+function radarData(visible,b){const m=radarMetrics(b);const norm=m.raw.map(a=>a.map(v=>v/maxOf(a)*100));
+  return {labels:m.labels,datasets:types.map((t,ti)=>({label:t,hidden:!visible[ti],
+    data:m.raw.map((a,ai)=>norm[ai][ti]),borderColor:colors[ti],backgroundColor:colors[ti]+"22",
+    borderWidth:2,pointRadius:3,pointBackgroundColor:colors[ti]}))};}
+let visible=types.map((_,i)=>i<2||i===4);
+const radar=new Chart(document.getElementById("radar"),{type:"radar",data:radarData(visible,curB),
+  options:{responsive:true,maintainAspectRatio:false,
+    scales:{r:{min:0,max:100,ticks:{stepSize:25,callback:v=>v+"%"},pointLabels:{font:{size:12,weight:"bold"}}}},
+    plugins:{legend:{position:"bottom"},tooltip:{callbacks:{label:c=>{const m=radarMetrics(curB);const ti=types.indexOf(c.dataset.label);
+      return `${c.dataset.label}: ${fmt(m.raw[c.dataIndex][ti]*area)} ${m.units[c.dataIndex]} (${Math.round(c.parsed.r)}%)`;}}}}}});
+const bound=document.getElementById("bound");
+bound.innerHTML='<span style="margin-right:8px">Systemgrenze (Radar):</span>'+['gate','grave','net'].map(b=>`<button data-b="${b}"${b===curB?' class="active"':''}>${blab[b]}</button>`).join("");
+bound.addEventListener("click",e=>{const b=e.target.getAttribute("data-b");if(!b)return;curB=b;
+  [...bound.querySelectorAll("button")].forEach(x=>x.classList.toggle("active",x.getAttribute("data-b")===b));
+  radar.data=radarData(visible,curB);radar.update();});
+const ctrl=document.getElementById("ctrl");
+ctrl.innerHTML='<span style="margin-right:8px">Typen:</span><button data-m="all">Alle</button><button data-m="none">Keine</button><button data-m="alu">Alu-Varianten</button>';
+ctrl.addEventListener("click",e=>{const m=e.target.getAttribute("data-m");if(!m)return;
+  if(m==="all")visible=types.map(_=>true);else if(m==="none")visible=types.map(_=>false);else if(m==="alu")visible=types.map(t=>t.includes("Aluminium"));
+  radar.data=radarData(visible,curB);radar.update();});
+document.getElementById("rnote").innerHTML=types.map((t,i)=>`<span class="pill" style="background:${colors[i]}">${t}</span>`).join("");
+
+// ---------- Gruppierte Diagramme (skalierbar) ----------
+function grouped(id,title,build){const ch=new Chart(document.getElementById(id),{type:"bar",
+  data:{labels:types,datasets:build()},
+  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:"bottom"},
+    title:{display:true,text:title,font:{size:14}},tooltip:{callbacks:{label:c=>c.dataset.label+": "+fmt(c.parsed.y)}}},
+    scales:{y:{beginAtZero:true}}}});CH.push({ch,build});}
+grouped("c_gwp","GWP nach Systemgrenze [kg CO₂e]",()=>[
+  {label:"Gate (A1-A3)",data:G("gate"),backgroundColor:"#9dc3e6"},
+  {label:"Grave (A1-C4)",data:G("grave"),backgroundColor:"#2e86c1"},
+  {label:"Netto",data:G("net"),backgroundColor:"#1f3864"}]);
+grouped("c_d","Modul D – Recyclingpotenzial [kg CO₂e]",()=>[
+  {label:"Modul D (Gutschrift)",data:G("d"),backgroundColor:colors}]);
+grouped("c_uk","Umweltkosten nach Systemgrenze [€]",()=>[
+  {label:"Gate (A1-A3)",data:UK("gate"),backgroundColor:"#9dc3e6"},
+  {label:"Grave (A1-C4)",data:UK("grave"),backgroundColor:"#2e86c1"},
+  {label:"Netto",data:UK("net"),backgroundColor:"#1f3864"}]);
+
+// ---------- Einzelkennzahlen (skalierbar, inkl. GWP & Umweltkosten je Systemgrenze) ----------
+const single=[
+ ["gew","Gewicht [kg]","kg",()=>sc(base.gw),"Gewicht"],
+ ["gwpgate","GWP Gate [kg CO₂e]","kg CO₂e",()=>G("gate"),"GWP Gate"],
+ ["gwpgrave","GWP Grave [kg CO₂e]","kg CO₂e",()=>G("grave"),"GWP Grave"],
+ ["gwpnet","GWP Netto [kg CO₂e]","kg CO₂e",()=>G("net"),"GWP Netto"],
+ ["ukgate","Umweltkosten Gate [€]","€",()=>UK("gate"),"UK Gate"],
+ ["ukgrave","Umweltkosten Grave [€]","€",()=>UK("grave"),"UK Grave"],
+ ["uknet","Umweltkosten Netto [€]","€",()=>UK("net"),"UK Netto"],
+ ["tmr","Materialaufwand (TMR) [kg]","kg",()=>sc(base.tmr),"TMR"],
+ ["scr","Recyclable Wert [€]","€",()=>sc(base.scr),"Recyclable"]];
+const kgrid=document.getElementById("kpiGrid");
+single.forEach(s=>{const d=document.createElement("div");d.id="box_"+s[0];
+  d.innerHTML='<div class="chartbox"><canvas id="c_'+s[0]+'"></canvas></div>';kgrid.appendChild(d);});
+function hbar(id,title,unit,dfn){const build=()=>[{label:title,data:dfn(),backgroundColor:colors,borderRadius:4}];
+  const ch=new Chart(document.getElementById(id),{type:"bar",data:{labels:types,datasets:build()},
+   options:{responsive:true,maintainAspectRatio:false,indexAxis:"y",
+    plugins:{legend:{display:false},title:{display:true,text:title,font:{size:13}},
+      tooltip:{callbacks:{label:c=>fmt(c.parsed.x)+" "+unit}}},scales:{x:{beginAtZero:true}}}});CH.push({ch,build});}
+single.forEach(s=>hbar("c_"+s[0],s[1],s[2],s[3]));
+const kc=document.getElementById("kpiCtrl");
+single.forEach(s=>{const b=document.createElement("button");b.textContent=s[4];b.className="active";b.dataset.k=s[0];kc.appendChild(b);});
+kc.addEventListener("click",e=>{const k=e.target.dataset.k;if(!k)return;
+  const on=e.target.classList.toggle("active");document.getElementById("box_"+k).style.display=on?"":"none";});
+
+// ---------- Tabelle ----------
+function buildTable(){
+ const cols=[["Gewicht",sc(base.gw)],["GWP Gate",G("gate")],["GWP Grave",G("grave")],["Modul D",G("d")],
+  ["GWP Netto",G("net")],["UK Gate",UK("gate")],["UK Grave",UK("grave")],["UK Netto",UK("net")],
+  ["TMR",sc(base.tmr)],["Recyclable",sc(base.scr)]];
+ let h="<thead><tr><th>Fenstertyp</th>"+cols.map(c=>`<th>${c[0]}</th>`).join("")+"</tr></thead><tbody>";
+ types.forEach((t,ti)=>{h+=`<tr><td><span class="pill" style="background:${colors[ti]}">&nbsp;</span> ${t}</td>`+
+   cols.map(c=>`<td>${fmt(c[1][ti])}</td>`).join("")+"</tr>";});
+ h+="</tbody>";document.getElementById("tbl").innerHTML=h;
+ document.getElementById("tnote").textContent="Werte für "+fmt(area)+" m². GWP in kg CO₂e, Umweltkosten/Recyclable in €, TMR/Gewicht in kg. Netto = Grave + Modul D.";
+}
+
+// ---------- Flächen-Skalierung ----------
+const areaIn=document.getElementById("areaIn");
+const presets=document.querySelectorAll("button[data-a]");
+function setArea(a){area=(a&&a>0)?a:1;areaIn.value=area;
+  presets.forEach(b=>b.classList.toggle("active",Math.abs(parseFloat(b.dataset.a)-area)<1e-6));redraw();}
+areaIn.addEventListener("input",()=>setArea(parseFloat(areaIn.value)||1));
+presets.forEach(b=>b.addEventListener("click",()=>setArea(parseFloat(b.dataset.a))));
+setArea(1);
+</script>
+</body>
+</html>
